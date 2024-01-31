@@ -29,7 +29,7 @@ from utils.utils import set_random_seed, convert_to_gpu, get_parameter_sizes, cr
 from utils.utils import get_neighbor_sampler, NegativeEdgeSampler
 from evaluate_models_utils import evaluate_model_link_prediction
 from utils.metrics import get_link_prediction_metrics
-from utils.DataLoader import get_idx_data_loader, get_link_prediction_data, get_link_pred_data_TRANS_TGB
+from utils.DataLoader import get_idx_data_loader, get_link_pred_data_TRANS_TGB
 from utils.EarlyStopping import EarlyStopping
 from utils.load_configs import get_link_prediction_args
 
