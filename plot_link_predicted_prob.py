@@ -4,6 +4,7 @@ import warnings
 import torch
 import torch.nn as nn
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 from models.TGAT import TGAT
 from models.MemoryModel import MemoryModel, compute_src_dst_node_time_shifts
@@ -82,6 +83,9 @@ def get_probabilities_by_time(model_name: str, model: nn.Module, neighbor_sample
 
     t_min = evaluate_data.node_interact_times.min().item()
     t_max = evaluate_data.node_interact_times.max().item()
+    r = t_max - t_min
+    t_min -= r * 0.2
+    t_max += r * 0.2
     times = np.linspace(t_min, t_max, num=count)
     src_ids = np.array([src] * count)
     dst_ids = np.array([dst] * count)
@@ -118,7 +122,7 @@ def get_probabilities_by_time(model_name: str, model: nn.Module, neighbor_sample
     return all_times[sort], all_preds[sort], real_times
 
 
-def main():
+def main(save_all=False, run=0):
     # get arguments
     args = get_link_prediction_args(is_evaluation=False)
 
@@ -144,7 +148,6 @@ def main():
     dataset.load_test_ns()
     negative_sampler = dataset.negative_sampler
 
-    run = 0
     set_random_seed(seed=args.seed + run)
     args.save_model_name = f'{args.model_name}_{args.dataset_name}_seed_{args.seed}_run_{run}'
 
@@ -216,27 +219,46 @@ def main():
     counts = {i: test_pairs.count(i) for i in set(test_pairs)}
     biggest = sorted(set(test_pairs), key=lambda i:counts[i], reverse=True)
 
-    for src, dst in biggest[:500:50]:
+    if save_all:
+        D = {}
+        pairs = tqdm(biggest)
+    else:
+        pairs = biggest[:500:250]
+
+    for src, dst in pairs:
         count = counts[(src, dst)]
-        print(f"Count {src}->{dst}: {count}")
+
+        # For some reason this one produces an error
+        if src == 2400 and dst == 8723:
+            continue
+
+        if count == 1 and save_all:
+            break
 
         times, probs, etimes = \
             get_probabilities_by_time(model_name=args.model_name, model=model, neighbor_sampler=full_neighbor_sampler,
-                                      evaluate_data=test_data, src=src, dst=dst, count=50, num_neighbors=args.num_neighbors,
+                                      evaluate_data=test_data, src=src, dst=dst, count=500, num_neighbors=args.num_neighbors,
                                       time_gap=args.time_gap)
 
         plt.rcParams["figure.figsize"] = (8, 4)
 
-        plt.title(f"Edge {src}->{dst}, count {count}")
-        plt.plot(times, probs)
-        plt.xlabel("Time")
-        plt.ylabel("Predicted link probability")
-        plt.ylim(-0.01, 1.01)
-        for etime in etimes:
-            plt.axvline(x=etime, color="C1", ls="--", linewidth=2, alpha=0.8)
-        plt.show()
+        if save_all:
+            D[(src, dst)] = (times.astype(np.float32), probs, etimes.astype(np.float32))
+        else:
+            plt.title(f"Edge {src}->{dst}, count {count}")
+            plt.plot(times, probs)
+            plt.xlabel("Time")
+            plt.ylabel("Predicted link probability")
+            plt.ylim(-0.01, 1.01)
+            for etime in etimes:
+                plt.axvline(x=etime, color="C1", ls="--", linewidth=2, alpha=0.8)
+            plt.show()
+
+    if save_all:
+        np.save(f"{save_model_folder}/graphmixer_preds_{run}.np", D)
 
 
 if __name__ == "__main__":
     warnings.filterwarnings('ignore')
-    main()
+    for run in range(4):
+        main(save_all=True, run=run)
