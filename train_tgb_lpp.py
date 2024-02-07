@@ -285,31 +285,35 @@ def main():
 
             # === validation
             # after one complete epoch, evaluate the model on the validation set
-            val_metric = eval_LPP_TGB(model_name=args.model_name, model=model, neighbor_sampler=full_neighbor_sampler, 
-                                      evaluate_idx_data_loader=val_idx_data_loader, evaluate_data=val_data,  
-                                      negative_sampler=negative_sampler, evaluator=evaluator, metric=metric,
-                                      split_mode='val', k_value=10, num_neighbors=args.num_neighbors, time_gap=args.time_gap)
-            val_perf_list.append(val_metric)
-            
-            epoch_time = timeit.default_timer() - start_epoch
-            logger.info(f'Epoch: {epoch + 1}, learning rate: {optimizer.param_groups[0]["lr"]}, train loss: {np.mean(train_losses):.4f}, elapsed time (s): {epoch_time:.4f}')
-            for metric_name in train_metrics[0].keys():
-                logger.info(f'train {metric_name}, {np.mean([train_metric[metric_name] for train_metric in train_metrics]):.4f}')
-            logger.info(f'Validation: {metric}: {val_metric: .4f}')
+            if False:
+                val_metric = eval_LPP_TGB(model_name=args.model_name, model=model, neighbor_sampler=full_neighbor_sampler,
+                                          evaluate_idx_data_loader=val_idx_data_loader, evaluate_data=val_data,
+                                          negative_sampler=negative_sampler, evaluator=evaluator, metric=metric,
+                                          split_mode='val', k_value=10, num_neighbors=args.num_neighbors, time_gap=args.time_gap)
+                val_perf_list.append(val_metric)
 
-            # select the best model based on all the validate metrics
-            val_metric_indicator = [(metric, val_metric, True)]
-            early_stop = early_stopping.step(val_metric_indicator, model)
+                epoch_time = timeit.default_timer() - start_epoch
+                logger.info(f'Epoch: {epoch + 1}, learning rate: {optimizer.param_groups[0]["lr"]}, train loss: {np.mean(train_losses):.4f}, elapsed time (s): {epoch_time:.4f}')
+                for metric_name in train_metrics[0].keys():
+                    logger.info(f'train {metric_name}, {np.mean([train_metric[metric_name] for train_metric in train_metrics]):.4f}')
+                logger.info(f'Validation: {metric}: {val_metric: .4f}')
 
-            if early_stop:
-                break
+                # select the best model based on all the validate metrics
+                val_metric_indicator = [(metric, val_metric, True)]
+                early_stop = early_stopping.step(val_metric_indicator, model)
 
-        # load the best model
-        early_stopping.load_checkpoint(model)
+                if early_stop:
+                    break
+
+        early_stopping.save_checkpoint(model)
+        if False:
+            # load the best model
+            early_stopping.load_checkpoint(model)
 
         total_train_val_time = timeit.default_timer() - start_run
         logger.info(f'Total train & validation elapsed time (s): {total_train_val_time:.6f}')
-        
+
+        continue
         # ========================================
         # ============== Final Test ==============
         # ========================================
