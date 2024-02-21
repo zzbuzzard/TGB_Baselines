@@ -21,7 +21,7 @@ from utils.load_configs import get_link_prediction_args
 
 from tgb.linkproppred.evaluate import Evaluator
 
-from plot_utils import get_temporal_edge_times
+from plot_utils import get_temporal_edge_times, calculate_average_step_difference, calculate_average_step_difference_full_range
 
 
 def query_pred_edge_batch(model_name: str, model: nn.Module,
@@ -114,25 +114,29 @@ def get_probabilities_by_time(model_name: str, model: nn.Module, neighbor_sample
         predicted_probs = np.concatenate(all_pred_probs, axis=0)
 
         # 2) Obtain probabilities for actual times
-        inds = np.logical_and(evaluate_data.src_node_ids == src, evaluate_data.dst_node_ids == dst)
-
-        real_src_ids, real_dst_ids, real_times, real_edge_ids = \
-            evaluate_data.src_node_ids[inds], evaluate_data.dst_node_ids[inds], \
-                evaluate_data.node_interact_times[inds], evaluate_data.edge_ids[inds]
-        src_embeds, dst_embeds = \
-            query_pred_edge_batch(model_name=model_name, model=model, src_node_ids=real_src_ids,
-                                  dst_node_ids=real_dst_ids,
-                                  node_interact_times=real_times, edge_ids=real_edge_ids, edges_are_positive=True,
-                                  num_neighbors=num_neighbors, time_gap=time_gap)
-        real_predicted_probs = model[1](input_1=src_embeds, input_2=dst_embeds).squeeze(dim=-1).sigmoid()
+        # inds = np.logical_and(evaluate_data.src_node_ids == src, evaluate_data.dst_node_ids == dst)
+        #
+        # real_src_ids, real_dst_ids, real_times, real_edge_ids = \
+        #     evaluate_data.src_node_ids[inds], evaluate_data.dst_node_ids[inds], \
+        #         evaluate_data.node_interact_times[inds], evaluate_data.edge_ids[inds]
+        # src_embeds, dst_embeds = \
+        #     query_pred_edge_batch(model_name=model_name, model=model, src_node_ids=real_src_ids,
+        #                           dst_node_ids=real_dst_ids,
+        #                           node_interact_times=real_times, edge_ids=real_edge_ids, edges_are_positive=True,
+        #                           num_neighbors=num_neighbors, time_gap=time_gap)
+        # real_predicted_probs = model[1](input_1=src_embeds, input_2=dst_embeds).squeeze(dim=-1).sigmoid()
 
     # Combine fake and real times, allowing plotting as a single graph
-    all_times = np.concatenate((times, real_times))
-    all_preds = np.concatenate((predicted_probs, real_predicted_probs.detach().cpu().numpy()))
+    # all_times = np.concatenate((times, real_times))
+    # all_preds = np.concatenate((predicted_probs, real_predicted_probs.detach().cpu().numpy()))
+
+    # Note: no longer using true edges as we are using very fine-grained negative sampling
+    all_times = times
+    all_preds = predicted_probs
 
     sort = np.argsort(all_times)
 
-    return all_times[sort], all_preds[sort], real_times
+    return all_times[sort], all_preds[sort]
 
 
 def main(save_all=False, run=0, neg_spacing=1):
@@ -249,12 +253,18 @@ def main(save_all=False, run=0, neg_spacing=1):
         if count == 1 and save_all:
             break
 
-        times, probs, _ = \
+        times, probs = \
             get_probabilities_by_time(model_name=args.model_name, model=model, neighbor_sampler=full_neighbor_sampler,
                                       evaluate_data=test_data, src=src, dst=dst, spacing=neg_spacing, num_neighbors=args.num_neighbors,
                                       time_gap=args.time_gap)
 
-        hop0, hop1, hop2 = get_temporal_edge_times(dataset, src-1, dst-1, 2, mask=dataset.test_mask)
+        hop0, hop1, hop2 = get_temporal_edge_times(dataset, src-1, dst-1, num_hops=2, mask=dataset.test_mask)
+
+        print("Ignoring events:", np.mean(np.abs(probs[1:] - probs[:-1])))
+        for i in range(3):
+            print()
+            score = calculate_average_step_difference_full_range([hop0, hop1, hop2], probs, times, i)
+            print(f"Average {i}-hop step difference: {score}")
 
         # Sanity check
         # A, B, C = set(hop0.tolist()), set(hop1.tolist()), set(hop2.tolist())
@@ -264,7 +274,7 @@ def main(save_all=False, run=0, neg_spacing=1):
         plt.rcParams["figure.figsize"] = (8, 4)
 
         if save_all:
-            D[(src - 1, dst - 1)] = (times.astype(np.float32), probs, etimes.astype(np.float32))
+            D[(src - 1, dst - 1)] = (times.astype(np.float32), probs, hop0.astype(np.float32))
         else:
             plt.title(f"Edge {src}->{dst}, count {count}")
             plt.plot(times, probs)
