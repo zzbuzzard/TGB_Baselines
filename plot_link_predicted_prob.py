@@ -74,7 +74,8 @@ def query_pred_edge_batch(model_name: str, model: nn.Module,
 
 
 def get_probabilities_by_time(model_name: str, model: nn.Module, neighbor_sampler: NeighborSampler, evaluate_data: Data,
-                              src: int, dst: int, count: int = 50, num_neighbors: int = 20, time_gap: int = 2000):
+                              src: int, dst: int, spacing: int = 1000, num_neighbors: int = 20, time_gap: int = 2000,
+                              batch: int = 512):
     """Returns (times, predicted probabilities, event times)."""
     if model_name in ['DyRep', 'TGAT', 'TGN', 'CAWN', 'TCL', 'GraphMixer', 'DyGFormer']:
         # evaluation phase use all the graph information
@@ -83,22 +84,32 @@ def get_probabilities_by_time(model_name: str, model: nn.Module, neighbor_sample
 
     t_min = evaluate_data.node_interact_times.min().item()
     t_max = evaluate_data.node_interact_times.max().item()
-    r = t_max - t_min
-    t_min -= r * 0.2
-    t_max += r * 0.2
-    times = np.linspace(t_min, t_max, num=count)
+    # r = t_max - t_min
+    # t_min -= r * 0.2
+    # t_max += r * 0.2
+    # times = np.linspace(t_min, t_max, num=count)
+    times = np.arange(t_min, t_max, step=spacing)
+    count = len(times)
     src_ids = np.array([src] * count)
     dst_ids = np.array([dst] * count)
 
     with torch.no_grad():
-        # TODO: might be worth adding batch option for large count
-        # 1) Obtain probabilities for linspace times
-        src_embeds, dst_embeds = \
-            query_pred_edge_batch(model_name=model_name, model=model, src_node_ids=src_ids, dst_node_ids=dst_ids,
-                                  node_interact_times=times, edge_ids=None, edges_are_positive=False,
-                                  num_neighbors=num_neighbors, time_gap=time_gap)
+        all_pred_probs = []
 
-        predicted_probs = model[1](input_1=src_embeds, input_2=dst_embeds).squeeze(dim=-1).sigmoid()
+        # Batch across negative samples
+        for start in tqdm(range(0, count, batch)):
+            end = min(start + batch, count)
+
+            # 1) Obtain probabilities for linspace times
+            src_embeds, dst_embeds = \
+                query_pred_edge_batch(model_name=model_name, model=model, src_node_ids=src_ids[start:end], dst_node_ids=dst_ids[start:end],
+                                      node_interact_times=times[start:end], edge_ids=None, edges_are_positive=False,
+                                      num_neighbors=num_neighbors, time_gap=time_gap)
+
+            predicted_probs = model[1](input_1=src_embeds, input_2=dst_embeds).squeeze(dim=-1).sigmoid()
+            all_pred_probs.append(predicted_probs.detach().cpu().numpy())
+
+        predicted_probs = np.concatenate(all_pred_probs, axis=0)
 
         # 2) Obtain probabilities for actual times
         inds = np.logical_and(evaluate_data.src_node_ids == src, evaluate_data.dst_node_ids == dst)
@@ -115,14 +126,14 @@ def get_probabilities_by_time(model_name: str, model: nn.Module, neighbor_sample
 
     # Combine fake and real times, allowing plotting as a single graph
     all_times = np.concatenate((times, real_times))
-    all_preds = np.concatenate((predicted_probs.detach().cpu().numpy(), real_predicted_probs.detach().cpu().numpy()))
+    all_preds = np.concatenate((predicted_probs, real_predicted_probs.detach().cpu().numpy()))
 
     sort = np.argsort(all_times)
 
     return all_times[sort], all_preds[sort], real_times
 
 
-def main(save_all=False, run=0):
+def main(save_all=False, run=0, neg_spacing=1):
     # get arguments
     args = get_link_prediction_args(is_evaluation=False)
 
@@ -237,13 +248,13 @@ def main(save_all=False, run=0):
 
         times, probs, etimes = \
             get_probabilities_by_time(model_name=args.model_name, model=model, neighbor_sampler=full_neighbor_sampler,
-                                      evaluate_data=test_data, src=src, dst=dst, count=500, num_neighbors=args.num_neighbors,
+                                      evaluate_data=test_data, src=src, dst=dst, spacing=neg_spacing, num_neighbors=args.num_neighbors,
                                       time_gap=args.time_gap)
 
         plt.rcParams["figure.figsize"] = (8, 4)
 
         if save_all:
-            D[(src, dst)] = (times.astype(np.float32), probs, etimes.astype(np.float32))
+            D[(src - 1, dst - 1)] = (times.astype(np.float32), probs, etimes.astype(np.float32))
         else:
             plt.title(f"Edge {src}->{dst}, count {count}")
             plt.plot(times, probs)
@@ -255,10 +266,10 @@ def main(save_all=False, run=0):
             plt.show()
 
     if save_all:
-        np.save(f"{save_model_folder}/graphmixer_preds_{run}.np", D)
+        np.save(f"saved_models/graphmixer_preds_{run}", D)
 
 
 if __name__ == "__main__":
     warnings.filterwarnings('ignore')
     for run in range(4):
-        main(save_all=True, run=run)
+        main(save_all=False, neg_spacing=1, run=run)
