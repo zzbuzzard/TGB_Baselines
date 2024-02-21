@@ -21,6 +21,8 @@ from utils.load_configs import get_link_prediction_args
 
 from tgb.linkproppred.evaluate import Evaluator
 
+from plot_utils import get_temporal_edge_times
+
 
 def query_pred_edge_batch(model_name: str, model: nn.Module,
                           src_node_ids: int, dst_node_ids: int, node_interact_times: float, edge_ids: int,
@@ -234,7 +236,8 @@ def main(save_all=False, run=0, neg_spacing=1):
         D = {}
         pairs = tqdm(biggest)
     else:
-        pairs = biggest[:500:250]
+        pairs = biggest[100:500:50]
+        print(biggest[:500:50])
 
     for src, dst in pairs:
         count = counts[(src, dst)]
@@ -246,10 +249,17 @@ def main(save_all=False, run=0, neg_spacing=1):
         if count == 1 and save_all:
             break
 
-        times, probs, etimes = \
+        times, probs, _ = \
             get_probabilities_by_time(model_name=args.model_name, model=model, neighbor_sampler=full_neighbor_sampler,
                                       evaluate_data=test_data, src=src, dst=dst, spacing=neg_spacing, num_neighbors=args.num_neighbors,
                                       time_gap=args.time_gap)
+
+        hop0, hop1, hop2 = get_temporal_edge_times(dataset, src-1, dst-1, 2, mask=dataset.test_mask)
+
+        # Sanity check
+        # A, B, C = set(hop0.tolist()), set(hop1.tolist()), set(hop2.tolist())
+        # print(len(A),len(B),len(C))
+        # print(len(A&B),len(A&C),len(B&C))
 
         plt.rcParams["figure.figsize"] = (8, 4)
 
@@ -261,8 +271,13 @@ def main(save_all=False, run=0, neg_spacing=1):
             plt.xlabel("Time")
             plt.ylabel("Predicted link probability")
             plt.ylim(-0.01, 1.01)
-            for etime in etimes:
+
+            for etime in hop0:
                 plt.axvline(x=etime, color="C1", ls="--", linewidth=2, alpha=0.8)
+            for etime in hop1:
+                plt.axvline(x=etime, color="C2", ls="--", linewidth=2, alpha=0.8)
+            for etime in hop2:
+                plt.axvline(x=etime, color="C3", ls="--", linewidth=2, alpha=0.8)
             plt.show()
 
     if save_all:
