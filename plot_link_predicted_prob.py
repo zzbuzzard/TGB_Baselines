@@ -21,7 +21,8 @@ from utils.load_configs import get_link_prediction_args
 
 from tgb.linkproppred.evaluate import Evaluator
 
-from plot_utils import get_temporal_edge_times, calculate_average_step_difference, calculate_average_step_difference_full_range
+from plot_utils import (get_temporal_edge_times, calculate_average_step_difference,
+                        calculate_average_step_difference_full_range, total_variation_per_unit_time)
 
 
 def query_pred_edge_batch(model_name: str, model: nn.Module,
@@ -261,15 +262,10 @@ def main(save_all=False, run=0, neg_spacing=1):
         hop0, hop1, hop2 = get_temporal_edge_times(dataset, src-1, dst-1, num_hops=2, mask=dataset.test_mask)
 
         print("Ignoring events:", np.mean(np.abs(probs[1:] - probs[:-1])))
-        for i in range(3):
-            print()
-            score = calculate_average_step_difference_full_range([hop0, hop1, hop2], probs, times, i)
-            print(f"Average {i}-hop step difference: {score}")
-
-        # Sanity check
-        # A, B, C = set(hop0.tolist()), set(hop1.tolist()), set(hop2.tolist())
-        # print(len(A),len(B),len(C))
-        # print(len(A&B),len(A&C),len(B&C))
+        for hop_threshold in range(4):
+            totvar, totvar_per_sec = total_variation_per_unit_time([hop0, hop1, hop2][:hop_threshold], probs, times)
+            print(f"TotalVar-{hop_threshold} = {totvar}")
+            print(f"TotalVar/s-{hop_threshold} = {totvar_per_sec}")
 
         plt.rcParams["figure.figsize"] = (8, 4)
 
@@ -286,8 +282,8 @@ def main(save_all=False, run=0, neg_spacing=1):
                 plt.axvline(x=etime, color="C1", ls="--", linewidth=2, alpha=0.8)
             for etime in hop1:
                 plt.axvline(x=etime, color="C2", ls="--", linewidth=2, alpha=0.8)
-            for etime in hop2:
-                plt.axvline(x=etime, color="C3", ls="--", linewidth=2, alpha=0.8)
+            # for etime in hop2:
+            #     plt.axvline(x=etime, color="C3", ls="--", linewidth=2, alpha=0.8)
             plt.show()
 
     if save_all:

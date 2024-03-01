@@ -285,7 +285,7 @@ def main():
 
             # === validation
             # after one complete epoch, evaluate the model on the validation set
-            if False:
+            if (epoch + 1) % 50 == 0:
                 val_metric = eval_LPP_TGB(model_name=args.model_name, model=model, neighbor_sampler=full_neighbor_sampler,
                                           evaluate_idx_data_loader=val_idx_data_loader, evaluate_data=val_data,
                                           negative_sampler=negative_sampler, evaluator=evaluator, metric=metric,
@@ -302,8 +302,8 @@ def main():
                 val_metric_indicator = [(metric, val_metric, True)]
                 early_stop = early_stopping.step(val_metric_indicator, model)
 
-                if early_stop:
-                    break
+                # if early_stop:
+                #     break
 
         early_stopping.save_checkpoint(model)
         if False:
@@ -313,7 +313,6 @@ def main():
         total_train_val_time = timeit.default_timer() - start_run
         logger.info(f'Total train & validation elapsed time (s): {total_train_val_time:.6f}')
 
-        continue
         # ========================================
         # ============== Final Test ==============
         # ========================================
