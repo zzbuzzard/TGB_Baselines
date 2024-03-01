@@ -10,7 +10,8 @@ class GraphMixer(nn.Module):
 
     def __init__(self, node_raw_features: np.ndarray, edge_raw_features: np.ndarray, neighbor_sampler: NeighborSampler,
                  time_feat_dim: int, num_tokens: int, num_layers: int = 2, token_dim_expansion_factor: float = 0.5,
-                 channel_dim_expansion_factor: float = 4.0, dropout: float = 0.1, device: str = 'cpu', time_encoder='cos'):
+                 channel_dim_expansion_factor: float = 4.0, dropout: float = 0.1, device: str = 'cpu',
+                 time_encoder: str = 'cos', time_multiplier: float = 1):
         """
         TCL model.
         :param node_raw_features: ndarray, shape (num_nodes + 1, node_feat_dim)
@@ -43,9 +44,9 @@ class GraphMixer(nn.Module):
         self.num_channels = self.edge_feat_dim
         if time_encoder == 'cos':
             # in GraphMixer, the time encoding function is not trainable
-            self.time_encoder = TimeEncoder(time_dim=time_feat_dim, parameter_requires_grad=False)
+            self.time_encoder = TimeEncoder(time_dim=time_feat_dim, parameter_requires_grad=False, mul=time_multiplier)
         elif time_encoder == 'learned_gaussian':
-            self.time_encoder = GaussianTimeEncoder(out_channels=time_feat_dim)
+            self.time_encoder = GaussianTimeEncoder(out_channels=time_feat_dim, mul=time_multiplier)
         self.projection_layer = nn.Linear(self.edge_feat_dim + time_feat_dim, self.num_channels)
 
         self.mlp_mixers = nn.ModuleList([
