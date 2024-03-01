@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from models.modules import TimeEncoder
+from models.modules import TimeEncoder, GaussianTimeEncoder
 from utils.utils import NeighborSampler
 
 
@@ -10,7 +10,7 @@ class GraphMixer(nn.Module):
 
     def __init__(self, node_raw_features: np.ndarray, edge_raw_features: np.ndarray, neighbor_sampler: NeighborSampler,
                  time_feat_dim: int, num_tokens: int, num_layers: int = 2, token_dim_expansion_factor: float = 0.5,
-                 channel_dim_expansion_factor: float = 4.0, dropout: float = 0.1, device: str = 'cpu'):
+                 channel_dim_expansion_factor: float = 4.0, dropout: float = 0.1, device: str = 'cpu', time_encoder='cos'):
         """
         TCL model.
         :param node_raw_features: ndarray, shape (num_nodes + 1, node_feat_dim)
@@ -41,8 +41,11 @@ class GraphMixer(nn.Module):
         self.device = device
 
         self.num_channels = self.edge_feat_dim
-        # in GraphMixer, the time encoding function is not trainable
-        self.time_encoder = TimeEncoder(time_dim=time_feat_dim, parameter_requires_grad=False)
+        if time_encoder == 'cos':
+            # in GraphMixer, the time encoding function is not trainable
+            self.time_encoder = TimeEncoder(time_dim=time_feat_dim, parameter_requires_grad=False)
+        elif time_encoder == 'learned_gaussian':
+            self.time_encoder = GaussianTimeEncoder(out_channels=time_feat_dim)
         self.projection_layer = nn.Linear(self.edge_feat_dim + time_feat_dim, self.num_channels)
 
         self.mlp_mixers = nn.ModuleList([
@@ -100,7 +103,10 @@ class GraphMixer(nn.Module):
         nodes_neighbor_time_features = self.time_encoder(timestamps=torch.from_numpy(node_interact_times[:, np.newaxis] - neighbor_times).float().to(self.device))
 
         # ndarray, set the time features to all zeros for the padded timestamp
-        nodes_neighbor_time_features[torch.from_numpy(neighbor_node_ids == 0)] = 0.0
+        # nodes_neighbor_time_features[torch.from_numpy(neighbor_node_ids == 0)] = 0.0
+        z = torch.zeros_like(nodes_neighbor_time_features)
+        inds = torch.from_numpy(neighbor_node_ids == 0).unsqueeze(-1).to(nodes_neighbor_time_features.device)
+        nodes_neighbor_time_features = torch.where(inds, z, nodes_neighbor_time_features)
 
         # Tensor, shape (batch_size, num_neighbors, edge_feat_dim + time_feat_dim)
         combined_features = torch.cat([nodes_edge_raw_features, nodes_neighbor_time_features], dim=-1)

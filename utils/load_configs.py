@@ -59,6 +59,7 @@ def get_link_prediction_args(is_evaluation: bool = False):
                         help='Training time granularity.')
     parser.add_argument('--eval_time_gran', type=str, default='ct', choices=['ct', 'dt'],
                         help='Evaluation time granularity.')
+    parser.add_argument('--time_encoder', type=str, default='cos')
 
     try:
         args = parser.parse_args()

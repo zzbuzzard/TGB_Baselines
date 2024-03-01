@@ -204,7 +204,8 @@ def main(save_all=False, run=0, neg_spacing=1):
         dynamic_backbone = GraphMixer(node_raw_features=node_raw_features, edge_raw_features=edge_raw_features,
                                       neighbor_sampler=full_neighbor_sampler,
                                       time_feat_dim=args.time_feat_dim, num_tokens=args.num_neighbors,
-                                      num_layers=args.num_layers, dropout=args.dropout, device=args.device)
+                                      num_layers=args.num_layers, dropout=args.dropout, device=args.device,
+                                      time_encoder=args.time_encoder)
     elif args.model_name == 'DyGFormer':
         dynamic_backbone = DyGFormer(node_raw_features=node_raw_features, edge_raw_features=edge_raw_features,
                                      neighbor_sampler=full_neighbor_sampler,
