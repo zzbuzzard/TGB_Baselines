@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from models.modules import TimeEncoder, GaussianTimeEncoder
+from models.modules import get_time_encoder
 from utils.utils import NeighborSampler
 
 
@@ -42,11 +42,7 @@ class GraphMixer(nn.Module):
         self.device = device
 
         self.num_channels = self.edge_feat_dim
-        if time_encoder == 'cos':
-            # in GraphMixer, the time encoding function is not trainable
-            self.time_encoder = TimeEncoder(time_dim=time_feat_dim, parameter_requires_grad=False, mul=time_multiplier)
-        elif time_encoder == 'learned_gaussian':
-            self.time_encoder = GaussianTimeEncoder(out_channels=time_feat_dim, mul=time_multiplier)
+        self.time_encoder = get_time_encoder(time_encoder, out_channels=time_feat_dim, mul=time_multiplier)
         self.projection_layer = nn.Linear(self.edge_feat_dim + time_feat_dim, self.num_channels)
 
         self.mlp_mixers = nn.ModuleList([

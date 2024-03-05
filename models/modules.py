@@ -3,58 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-
-class TimeEncoder(nn.Module):
-
-    def __init__(self, time_dim: int, parameter_requires_grad: bool = True, mul: float = 1e-4):
-        """
-        Time encoder.
-        :param time_dim: int, dimension of time encodings
-        :param parameter_requires_grad: boolean, whether the parameter in TimeEncoder needs gradient
-        """
-        super(TimeEncoder, self).__init__()
-
-        self.time_dim = time_dim
-        # trainable parameters for time encoding
-        self.w = nn.Linear(1, time_dim)
-        self.w.weight = nn.Parameter((torch.from_numpy(1 / 10 ** np.linspace(0, 9, time_dim, dtype=np.float32))).reshape(time_dim, 1))
-        self.w.bias = nn.Parameter(torch.zeros(time_dim))
-
-        self.mul = mul
-
-        if not parameter_requires_grad:
-            self.w.weight.requires_grad = False
-            self.w.bias.requires_grad = False
-
-    def forward(self, timestamps: torch.Tensor):
-        """
-        compute time encodings of time in timestamps
-        :param timestamps: Tensor, shape (batch_size, seq_len)
-        :return:
-        """
-        timestamps = timestamps * self.mul
-
-        # Tensor, shape (batch_size, seq_len, 1)
-        timestamps = timestamps.unsqueeze(dim=2)
-
-        # Tensor, shape (batch_size, seq_len, time_dim)
-        output = torch.cos(self.w(timestamps))
-
-        return output
-
-
-class GaussianTimeEncoder(torch.nn.Module):
-    """Inspired by Gaussian PDF"""
-    def __init__(self, out_channels: int, parameter_requires_grad: bool = True, mul=1e-4):
-        super().__init__()
-        self.out_channels = out_channels
-        self.lin = nn.Linear(1, out_channels, bias=True)
-        self.mul = mul
-
-    def forward(self, timestamps):
-        timestamps = timestamps.unsqueeze(-1) * self.mul
-        return torch.exp(-self.lin(timestamps) ** 2)
-
+from time_encoders import *
 
 
 class MergeLayer(nn.Module):
