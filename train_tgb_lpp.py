@@ -110,9 +110,7 @@ def main():
         start_run = timeit.default_timer()
         set_random_seed(seed=args.seed + run)
 
-        args.save_model_name = (
-            f"{args.model_name}_{args.dataset_name}_seed_{args.seed}_run_{run}"
-        )
+        args.save_model_name = f"{args.model_name}_{args.dataset_name}_seed_{args.seed}_run_{run}_{args.time_encoder}_{args.mul}"
 
         # set up logger
         logging.basicConfig(level=logging.INFO)
@@ -473,7 +471,7 @@ def main():
 
             # === validation
             # after one complete epoch, evaluate the model on the validation set
-            if (epoch + 1) % 5 == 0:
+            if (epoch + 1) % 50 == 0:
                 val_metric = eval_LPP_TGB(
                     model_name=args.model_name,
                     model=model,

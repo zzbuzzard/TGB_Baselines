@@ -167,7 +167,7 @@ def main(save_all=False, run=0, neg_spacing=1):
     negative_sampler = dataset.negative_sampler
 
     set_random_seed(seed=args.seed + run)
-    args.save_model_name = f'{args.model_name}_{args.dataset_name}_seed_{args.seed}_run_{run}'
+    args.save_model_name = f"{args.model_name}_{args.dataset_name}_seed_{args.seed}_run_{run}_{args.time_encoder}_{args.mul}"
 
     # create model
     if args.model_name == 'TGAT':
