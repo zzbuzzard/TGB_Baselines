@@ -42,9 +42,12 @@ def get_probabilities_by_time_batched(model_name: str, model: nn.Module, neighbo
 
     metric = {}
 
-    for i in range(4):
-        metric[f"TV-{i}"] = []
-        metric[f"TV/s-{i}"] = []
+    metric["TV"] = []
+    metric["TV/s"] = []
+
+    # for i in range(4):
+    #     metric[f"TV-{i}"] = []
+    #     metric[f"TV/s-{i}"] = []
 
     with torch.no_grad():
 
@@ -73,16 +76,19 @@ def get_probabilities_by_time_batched(model_name: str, model: nn.Module, neighbo
             # plt.plot(times, predicted_probs)
             # plt.show()
 
-            # Calculate metric
-            hops = get_temporal_edge_times(dataset, src-1, dst-1, num_hops=2, mask=dataset.test_mask)  # hop0,1,2
-            for hop_threshold in range(4):
-                totvar, totvar_per_sec = total_variation_per_unit_time(hops[:hop_threshold], predicted_probs, times)
-                # print(f"TotalVar-{hop_threshold} = {totvar}")
-                # print(f"TotalVar/s-{hop_threshold} = {totvar_per_sec}")
+            totvar, totvar_per_sec = total_variation_per_unit_time([], predicted_probs, times)
+            metric["TV"].append(totvar)
+            metric["TV/s"].append(totvar_per_sec)
 
-                metric[f"TV-{hop_threshold}"].append(totvar)
-                metric[f"TV/s-{hop_threshold}"].append(totvar_per_sec)
-            pass
+            # Calculate metric
+            # hops = get_temporal_edge_times(dataset, src-1, dst-1, num_hops=2, mask=dataset.test_mask)  # hop0,1,2
+            # for hop_threshold in range(4):
+            #     totvar, totvar_per_sec = total_variation_per_unit_time(hops[:hop_threshold], predicted_probs, times)
+            #     # print(f"TotalVar-{hop_threshold} = {totvar}")
+            #     # print(f"TotalVar/s-{hop_threshold} = {totvar_per_sec}")
+            #
+            #     metric[f"TV-{hop_threshold}"].append(totvar)
+            #     metric[f"TV/s-{hop_threshold}"].append(totvar_per_sec)
 
     for k in list(metric):
         metric[k] = sum(metric[k]) / len(metric[k])
@@ -90,9 +96,13 @@ def get_probabilities_by_time_batched(model_name: str, model: nn.Module, neighbo
     return metric
 
 
-def main(save_all=False, run=0, neg_spacing=1):
-    args = get_link_prediction_args(is_evaluation=False)
+MASK = None
+
+
+def main(time_encoder, run=0):
+    global MASK
     set_random_seed(seed=args.seed + run)
+    args.time_encoder = time_encoder
 
     node_raw_features, edge_raw_features, full_data, train_data, val_data, test_data, dataset = \
         get_link_pred_data_TRANS_TGB(dataset_name=args.dataset_name)
@@ -176,21 +186,55 @@ def main(save_all=False, run=0, neg_spacing=1):
     srcs = unique_edges[:, 0]
     dsts = unique_edges[:, 1]
 
+    if MASK is None:
+        count = int(FILTER_PROPORTION * srcs.shape[0])
+        MASK = np.random.permutation(srcs.shape[0])[:count]
+        print(f"Generated mask, filtering from {srcs.shape[0]} -> {count} unique edges.")
+        print(MASK[:10])  # sanity check for determinacy
+
+    srcs = srcs[MASK]
+    dsts = dsts[MASK]
+
     metric = get_probabilities_by_time_batched(model_name=args.model_name, model=model, dataset=dataset,
                                                neighbor_sampler=full_neighbor_sampler, evaluate_data=test_data,
                                                srcs=srcs, dsts=dsts, time_step=TIME_STEP,
-                                               num_neighbors=args.num_neighbors, time_gap=args.time_gap)
+                                               num_neighbors=args.num_neighbors, time_gap=args.time_gap, batch=512)
     return metric
 
 
 if __name__ == "__main__":
-    TIME_STEP = 1000
+    TIME_STEP = 50
+
+    args = get_link_prediction_args(is_evaluation=False)
+
+    # proportion of unique edges to keep for evaluation (chosen randomly, but constant between seeds)
+    FILTER_PROPORTION = 0.2
 
     warnings.filterwarnings('ignore')
-    ms = []
-    for i in range(1):
-        ms.append(main(run=i))
 
-    for key in sorted(ms[0]):
-        data = np.array([m[key] for m in ms])
-        print(f"{key}: {data.sum()} +- {data.std()}")
+    save_data = {}
+    save_path = f"GraphMixer_metric_{args.dataset_name}"
+    print("Save path:", save_path)
+
+    print(f"Calculating metric for GraphMixer on dataset {args.dataset_name}")
+
+    for time_encoder in ["graph_mixer", "learned_cos", "scaled_fixed_id", "fixed_gaussian", "decay_amp_gm"]:
+        print(f"Time encoder: {time_encoder}")
+        ms = []
+        for i in range(3):
+            ms.append(main(run=i, time_encoder=time_encoder))
+
+        print(f"Results for time encoder {time_encoder}")
+
+        combined = {}
+        for key in sorted(ms[0]):
+            data = np.array([m[key] for m in ms])
+            combined[key] = (data.mean(), data.std(), data)
+            print(f"{key}: {data.mean()} +- {data.std()}")
+
+        save_data[time_encoder] = combined
+
+        # Save after each time encoder in case program terminates before completion
+        np.save(save_path, save_data)
+        print(f"Saved to {save_path}")
+        print()
