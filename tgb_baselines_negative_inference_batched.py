@@ -229,8 +229,8 @@ if __name__ == "__main__":
         combined = {}
         for key in sorted(ms[0]):
             data = np.array([m[key] for m in ms])
-            combined[key] = (data.sum(), data.std(), data)
-            print(f"{key}: {data.sum()} +- {data.std()}")
+            combined[key] = (data.mean(), data.std(), data)
+            print(f"{key}: {data.mean()} +- {data.std()}")
 
         save_data[time_encoder] = combined
 
