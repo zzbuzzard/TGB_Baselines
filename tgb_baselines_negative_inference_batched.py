@@ -203,7 +203,7 @@ def main(time_encoder, run=0):
 
 
 if __name__ == "__main__":
-    TIME_STEP = 5000
+    TIME_STEP = 50
 
     args = get_link_prediction_args(is_evaluation=False)
 
